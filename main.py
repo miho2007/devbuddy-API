@@ -1,3 +1,4 @@
+# main.py
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
@@ -6,7 +7,6 @@ from user import User
 import jwt
 from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
-
 
 app = FastAPI()
 
@@ -86,13 +86,14 @@ def register_user(user: UserCreate):
         raise HTTPException(status_code=400, detail="Email already registered")
     new_user = User(
         email=user.email,
-        password=user.password,
+        password="",  # will set hashed password below
         stack=user.stack,
         photo=user.photo,
         swipe_rate=user.swipe_rate,
         wanted_stack=user.wanted_stack,
         account_type=user.account_type
     )
+    new_user.set_password(user.password)
     users_db[user.email] = new_user
     return {"message": "User created successfully", "email": user.email}
 
@@ -124,4 +125,3 @@ def read_profile(token: str = Depends(oauth2_scheme)):
 @app.get("/")
 def home():
     return {"message": "FastAPI User Service with JWT is running 🚀"}
-
