@@ -5,8 +5,18 @@ from enum import Enum
 from user import User
 import jwt
 from datetime import datetime, timedelta
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # <-- allow all origins for testing
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # -----------------------------
 # Secret key & JWT settings
@@ -114,3 +124,4 @@ def read_profile(token: str = Depends(oauth2_scheme)):
 @app.get("/")
 def home():
     return {"message": "FastAPI User Service with JWT is running 🚀"}
+
