@@ -1,77 +1,60 @@
 # main.py
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
-from enum import Enum
-from user import User
 import jwt
 from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from user import User, UserCreate, Token, AccountType, SessionLocal
 
+# -----------------------------
+# FastAPI app & CORS
+# -----------------------------
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # <-- allow all origins for testing
+    allow_origins=["*"],  # allow all origins for testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # -----------------------------
-# Secret key & JWT settings
+# JWT Settings
 # -----------------------------
-SECRET_KEY = "your-secret-key"  # change this to something random & secure
+SECRET_KEY = "your-secret-key"  # change to a secure random key
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# -----------------------------
-# Pydantic models
-# -----------------------------
-class AccountType(str, Enum):
-    PRIVATE = "private"
-    CORPORATE = "corporate"
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    stack: list[str] = []
-    photo: str | None = None
-    swipe_rate: float = 0.0
-    wanted_stack: list[str] = []
-    account_type: AccountType = AccountType.PRIVATE
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-# -----------------------------
-# In-memory DB
-# -----------------------------
-users_db = {}
-
-# -----------------------------
-# OAuth2
-# -----------------------------
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # -----------------------------
-# Helper functions
+# Helpers
 # -----------------------------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def verify_token(token: str):
+def verify_token(token: str, db: Session):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return users_db.get(email)
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.PyJWTError:
@@ -81,47 +64,44 @@ def verify_token(token: str):
 # Routes
 # -----------------------------
 @app.post("/users/register")
-def register_user(user: UserCreate):
-    if user.email in users_db:
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     new_user = User(
         email=user.email,
-        password="",  # will set hashed password below
         stack=user.stack,
+        wanted_stack=user.wanted_stack,
         photo=user.photo,
         swipe_rate=user.swipe_rate,
-        wanted_stack=user.wanted_stack,
-        account_type=user.account_type
+        account_type=user.account_type.value
     )
     new_user.set_password(user.password)
-    users_db[user.email] = new_user
-    return {"message": "User created successfully", "email": user.email}
-
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "User created successfully", "email": new_user.email}
 
 @app.post("/token", response_model=Token)
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = users_db.get(form_data.username)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not user.check_password(form_data.password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
-
 @app.get("/profile")
-def read_profile(token: str = Depends(oauth2_scheme)):
-    user = verify_token(token)
+def read_profile(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    user = verify_token(token, db)
     return {
         "email": user.email,
         "stack": user.stack,
         "wanted_stack": user.wanted_stack,
         "photo": user.photo,
         "swipe_rate": user.swipe_rate,
-        "account_type": user.account_type.value
+        "account_type": user.account_type
     }
 
-# -----------------------------
-# Test endpoint
-# -----------------------------
 @app.get("/")
 def home():
-    return {"message": "FastAPI User Service with JWT is running 🚀"}
+    return {"message": "FastAPI User Service with JWT + Postgres is running 🚀"}
