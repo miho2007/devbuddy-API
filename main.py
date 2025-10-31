@@ -1,37 +1,28 @@
-# main.py
-import jwt
-from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from user import User, UserCreate, Token, AccountType, SessionLocal
+import jwt
+from datetime import datetime, timedelta
+from fastapi.middleware.cors import CORSMiddleware
 
-# -----------------------------
-# FastAPI app & CORS
-# -----------------------------
+from user import User, UserCreate, Token, AccountType, SessionLocal  # ✅ correct import
+
+# FastAPI & CORS
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins for testing
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -----------------------------
-# JWT Settings
-# -----------------------------
-SECRET_KEY = "your-secret-key"  # change to a secure random key
+SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# -----------------------------
-# Helpers
-# -----------------------------
 def get_db():
     db = SessionLocal()
     try:
@@ -60,9 +51,6 @@ def verify_token(token: str, db: Session):
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# -----------------------------
-# Routes
-# -----------------------------
 @app.post("/users/register")
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user.email).first()
