@@ -1,0 +1,4 @@
+fastapi==0.111.2
+uvicorn==0.24.0
+bcrypt==4.0.1
+pydantic==2.7.0
