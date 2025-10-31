@@ -4,5 +4,6 @@ bcrypt
 pydantic[email]
 pyjwt
 passlib[bcrypt]
+python-multipart
 
 
