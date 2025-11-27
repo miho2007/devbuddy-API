@@ -1,12 +1,7 @@
 fastapi
 uvicorn
-bcrypt
-pydantic[email]
-pyjwt
-passlib[bcrypt]
-python-multipart
-
 sqlalchemy
-psycopg2-binary
+pydantic
+jinja2
 python-multipart
-
+aiosqlite
