@@ -7,5 +7,7 @@ jinja2
 python-multipart
 aiosqlite
 beautifulsoup4
+aiofiles
+
 
 
